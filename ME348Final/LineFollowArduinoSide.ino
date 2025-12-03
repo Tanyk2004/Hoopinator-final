@@ -1,22 +1,22 @@
 #include <QTRSensors.h>
 #include <AStar32U4Motors.h>
-AStar32U4Motors m; //read the documentation of this library to understand what functions to use to drive the motors and how to use them
+//AStar32U4Motors m; //read the documentation of this library to understand what functions to use to drive the motors and how to use them
 QTRSensors qtr;
 const uint8_t SensorCount = 8;
 uint16_t sensorValues[SensorCount];
 uint16_t linePosition = 3500;
 
-const byte numChars = 32;
-char receivedChars[numChars];
-char tempChar[numChars]; // temporary array used for parsing
+//const byte numChars = 32;
+//char receivedChars[numChars];
+//char tempChar[numChars]; // temporary array used for parsing
 
 
 //motor command variables
-int leftMotor=0; //int leftMotor
-int rightMotor=0;
-int isCross=0;
+//int leftMotor=0; //int leftMotor
+//int rightMotor=0;
+//int isCross=0;
 
-boolean newData = false;
+//boolean newData = false;
 
 //=====================================================
 

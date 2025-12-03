@@ -1,6 +1,7 @@
 #include <AStar32U4Motors.h>
 #include <float.h>
 #include <limits.h>
+#include <QTRSensors.h>
 
 enum RobotStates {
   INIT = 0,
@@ -16,6 +17,14 @@ enum Directions {
   LEFT = 2,
   RIGHT = -2
 };
+
+#define MOTOR_SPEED 50
+
+uint16_t LINE_POSITION_CENTER = 3500;
+QTRSensors qtr;
+const uint8_t SensorCount = 8;
+uint16_t sensorValues[SensorCount];
+uint16_t linePosition = LINE_POSITION_CENTER;
 
 const int trigPinFront = 7;
 const int echoPinFront = 6;
@@ -79,7 +88,8 @@ void publishSensorData() {
   Serial.print(distanceFront);
   Serial.print(",");
   Serial.print(distanceRight);
-
+  Serial.print(",");
+  Serial.print(linePosition);
   Serial.print(",");
   Serial.print(leftMotor);
   Serial.print(",");
@@ -135,34 +145,34 @@ void dr_turn(Directions dir) {
 
 void dr_turnLeft() {  // make it turn 90 degrees
   dr_lastDirection = LEFT;
-  leftMotor = -100;
-  rightMotor = 100;
+  leftMotor = -1 * MOTOR_SPEED -10;
+  rightMotor = MOTOR_SPEED -10;
   commandMotors();
 }
 
 void dr_turnRight() {  // make it turn 90 degrees
   dr_lastDirection = RIGHT;
-  leftMotor = 100;
-  rightMotor = -100;
+  leftMotor = MOTOR_SPEED -10;
+  rightMotor = -1 * MOTOR_SPEED - 10;
   commandMotors();
 }
 
 void dr_turnAround(Directions bias) {
-  leftMotor = 150;
-  rightMotor = -150;
+  leftMotor = MOTOR_SPEED / 2;
+  rightMotor = -MOTOR_SPEED / 2;
   commandMotors();
-  delay(1000);  // adjust this delay to achieve a 180-degree turn
+  delay(800);  // adjust this delay to achieve a 180-degree turn
   stopMotors();
   // TODO: Add the bias
   if (bias == LEFT) {
-    leftMotor = -50;
-    rightMotor = 50;
-    delay(300);
+    leftMotor = -MOTOR_SPEED;
+    rightMotor = MOTOR_SPEED;
+    delay(100);
   } else {
     dr_lastDirection = RIGHT;
-    leftMotor = 50;
-    rightMotor = -50;
-    delay(300);
+    leftMotor = MOTOR_SPEED;
+    rightMotor = -MOTOR_SPEED;
+    delay(100);
   }
 }
 
@@ -271,6 +281,169 @@ void turnTowardLeftWall() {
   stopMotors();
 }
 
+void calibrateSensors(){
+
+  //THE SENSORS ONLY CALIBRATE WHEN YOU UPLOAD NEW ARDUINO CODE TO THE ASTAR. after that the sensors STAY calibrated as long as the Astar has power.
+
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH); // turn on Arduino's LED to indicate we are in calibration mode
+                                   ///while calibrating, move the sensor over the line a couple times
+
+  // 2.5 ms RC read timeout (default) * 10 reads per calibrate() call
+  // = ~25 ms per calibrate() call.
+  // Call calibrate() 400 times to make calibration take about 10s seconds.
+  for (uint16_t i = 0; i < 400; i++)
+  {
+    qtr.calibrate();
+  }
+  digitalWrite(LED_BUILTIN, LOW); // turn off Arduino's LED to indicate we are through with calibration
+  
+}
+
+
+
+int repairLineSensors() {
+  for (int i=0; i<= 7; i++){
+   if (sensorValues[i] <300){
+       sensorValues[i]=0;     
+    }
+  }
+  if (sensorValues[0]==0 && sensorValues[1]==0 && sensorValues[2]==0 && sensorValues[3]==0 && sensorValues[4]==0 && sensorValues[5]==0 && sensorValues[6]==0 && sensorValues[7]==0){
+  linePosition=0;
+  }
+
+  if (sensorValues[0] >0 && sensorValues[1]==0 && sensorValues[2]==0 && sensorValues[3]==0 && sensorValues[4]==0 && sensorValues[5]==0 && sensorValues[6]==0 && sensorValues[7]==0){
+    linePosition=1000;
+  } 
+  if (sensorValues[7] >0 && sensorValues[0]==0 && sensorValues[1]==0 && sensorValues[2]==0 && sensorValues[3]==0 && sensorValues[4]==0 && sensorValues[5]==0 && sensorValues[6]==0){
+    linePosition=5000;
+  }
+
+  //REPAIR NUMBER 4: there are still situations where linePosition is somehow greater than 5000 or 0<linePosition<1000, so I am hard capping linePosition to be between 1000 and 5000 when linePosition is greater
+  //than zero.
+  if (linePosition > 5000){
+    linePosition = 5000;
+  }
+  if (linePosition < 1000 && linePosition > 0){
+    linePosition = 1000;
+  }
+
+  // No line is detected
+  if (sensorValues[0]==0 && sensorValues[1]==0 && sensorValues[2]==0 && sensorValues[3]==0 && sensorValues[4]==0 && sensorValues[5]==0 && sensorValues[6]==0 && sensorValues[7]==0){
+    linePosition = 9500;
+  }
+
+  //this loop uses the leftmost and rightmost sensors to determin if the robot is at a cross. If both of those sensors read high, then the robot is at a cross. 
+  if ((sensorValues[7] > 500) && (sensorValues[0] > 500)){
+    return 1;
+  }
+  else {
+    return 0;
+  }
+}
+
+void handleLineFollowing() {
+
+  int crossesSeen = 0;
+  float LineKp = 0.2;
+  float LineKI = 0;
+  float LineKD = 0;
+
+  unsigned long previousMillis = millis();
+  float prevError = -5000;
+  float error = 0;
+  float totalError = 0;
+  // float output = 0;
+  int numIterations = 0;
+  int iterationLastReset = 0;
+
+  bool debouncing = false;
+  bool first = true;
+
+  while (crossesSeen < 2) {
+    linePosition = qtr.readLineBlack(sensorValues);
+    int res = repairLineSensors();
+    if (res == 1 && !debouncing) {
+      debouncing = true;
+    } else if (res == 0 && debouncing) {
+      debouncing = false;
+      crossesSeen++;
+
+      leftMotor = 0;
+      rightMotor = 0;
+      commandMotors();
+      delay(5000);
+    } 
+    // if none of the sensors see a line drive forward
+    if (linePosition == 9500) {
+      leftMotor = MOTOR_SPEED;
+      rightMotor = MOTOR_SPEED;
+      commandMotors();
+      continue;
+    }
+
+    // Implement a simple PID controller for line following
+    
+
+    error = (float)linePosition - 3500.0f;  // assuming 3500 is the
+    if (first) {
+      prevError = error;
+      first = false;
+    }
+
+    unsigned long currentMillis = millis();
+    int deltaTime = currentMillis - previousMillis;
+    if (deltaTime == 0) {
+      deltaTime = 1;  // prevent division by zero
+    }
+    totalError += error * deltaTime;
+
+    if (numIterations - iterationLastReset >= 100) {
+      totalError = 0;
+      iterationLastReset = numIterations;
+    }
+
+    float derivative = (error - prevError) / deltaTime;   // placeholder for derivative term
+    // output += LinedsaKp * error; //+ LineKD * derivative + LineKI * totalError;  // + LineKI * integral + LineKD * derivative;
+    float output =  LineKp * error + LineKD * derivative + LineKI * totalError;
+    output = constrain(output, -20.0, 20.0);
+
+    Serial.print("output: ");
+    Serial.println(output);
+    Serial.print("linePosition: ");
+    Serial.println(linePosition);
+    Serial.print("error: ");
+    Serial.println(error);
+    Serial.print("prevError: ");
+    Serial.println(prevError);
+    Serial.print("crossesSeen: ");
+    Serial.println(crossesSeen);
+    Serial.println("Motor Values: ");
+    // output = float(map(long(output), -3500, 3500, -10, 10));
+
+
+    leftMotor = MOTOR_SPEED - output;
+    rightMotor = MOTOR_SPEED + output;
+    
+    Serial.print(leftMotor);
+    Serial.print(",");
+    Serial.println(rightMotor);
+    leftMotor = constrain(leftMotor, -70, 70);
+    rightMotor = constrain(rightMotor, -70, 70);
+
+    previousMillis = currentMillis;
+    prevError = error;
+    numIterations++;
+    commandMotors();
+    delay(50);
+  }
+  currentState = INIT;
+  leftMotor = 0;
+  rightMotor = 0;
+  commandMotors();
+  delay(2000);
+}
+
 void setup() {
   Serial.begin(115200);
   pinMode(trigPinFront, OUTPUT);
@@ -282,13 +455,33 @@ void setup() {
   digitalWrite(LED_BUILTIN, HIGH);
   delay(5000);
   digitalWrite(LED_BUILTIN, LOW);
+  qtr.setTypeRC();
+  qtr.setSensorPins((const uint8_t[]){18, 20, 21, 22, 23, 16, 15, 14}, SensorCount);
+  calibrateSensors();
+
+  qtr.setEmitterPin(4); //can get away with a single emitter pin providing power to both emitters
+   QTRReadMode::On; //emitters on measures active reflectance instead of ambient light levels, better becasue the ambient light level will change as the robot moves around the board but the reflectance levels will not
 }
 
 void loop() {
 
   distanceRight = getUltrasonicReading(trigPinRight, echoPinRight);
   distanceFront = getUltrasonicReading(trigPinFront, echoPinFront);
-
+  linePosition = qtr.readLineBlack(sensorValues);
+  repairLineSensors();
+  Serial.println("Sensor Values: ");
+  for (int i=0; i<= 7; i++){
+    Serial.print(sensorValues[i]);
+    Serial.print(",");
+  }
+  Serial.println();
+  // Every sensor reading under 300 is a noisy and messes up the lineposition measurement, so this for loop filters it out
+  for (int i=0; i<= 7; i++){
+    if (sensorValues[i] <300){
+        sensorValues[i]=0;     
+      }
+  }
+  
   recvWithStartEndMarkers();
   if (newData == true) {
     strcpy(tempChar, receivedChars);
@@ -399,11 +592,10 @@ void loop() {
         currentState = LINE_FOLLOWING;
       }
 
-
-
       break;
     case LINE_FOLLOWING:
       /* code */
+      handleLineFollowing();
       break;
     case AIMING:
       /* code */

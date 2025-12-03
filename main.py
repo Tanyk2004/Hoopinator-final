@@ -7,6 +7,7 @@ import RPi.GPIO as GPIO
 import csv
 from gpiozero import RotaryEncoder
 from enum import Enum
+import asyncio
 
 class RobotStates(Enum):
     INIT = 0,
@@ -64,6 +65,22 @@ LOWER_BOUND = -100
 
 controlSignal_l = 0
 controlSignal_r = 0
+
+#IR Beacon setup stuff
+sensorR = 14
+sensorM = 15
+sensorL = 17
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(sensorR,GPIO.IN)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(sensorM,GPIO.IN)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(sensorL,GPIO.IN)
+
+LEFT_ON = False
+MID_ON = False
+RIGHT_ON = False
 
 def scaleControlSignal(signal):
 
@@ -132,6 +149,44 @@ def set_motor_velocity(des_left_vel, des_right_vel, left_posCurr, right_posCurr,
     print("Left Velocity (rev/s): ", left_velCurr)
     print("Right Velocity (rev/s): ", right_velCurr)
 
+async def IRcheck():
+	await asyncio.sleep(1)
+	valL = GPIO.input(sensorL)
+	valM = GPIO.input(sensorM)
+	valR = GPIO.input(sensorR)	
+	if valL:
+		print('L NOT DETECTED')
+		LEFT_ON = False
+				
+	else:
+		print('L DETECTED')
+		LEFT_ON = True
+
+	if valM:
+		print('M NOT DETECTED')
+		MED_ON = False
+				
+	else:
+		print('M DETECTED')
+		MED_ON = True
+
+	if valR:
+		print('R NOT DETECTED')
+		RIGHT_ON = False
+				
+	else:
+		print('R DETECTED')
+		RIGHT_ON = True
+            
+async def mainIR():
+	print('IR Sensor Ready')
+
+	try:
+		while True:
+			await IRcheck()
+	except KeyboardInterrupt:
+		GPIO.cleanup()
+
 if __name__ == '__main__':
     ser=serial.Serial('/dev/ttyACM0',115200)
     ser.reset_input_buffer() #clears anything the arduino has been sending while the Rpi isnt prepared to recieve.
@@ -144,7 +199,7 @@ if __name__ == '__main__':
     leftMotor=int(100)
     rightMotor=int(100)
 
-
+    asyncio.run(mainIR())
 
     while True:
         tcurr = time.perf_counter() - tstart
