@@ -18,7 +18,7 @@ enum Directions {
   RIGHT = -2
 };
 
-#define MOTOR_SPEED 50
+#define MOTOR_SPEED 100
 
 uint16_t LINE_POSITION_CENTER = 3500;
 QTRSensors qtr;
@@ -84,7 +84,8 @@ float getUltrasonicReading(int trigPin, int echoPin) {
 
 void publishSensorData() {
   // Placeholder for publishing sensor data if needed
-
+  Serial.print(currentState);
+  Serial.print(",");
   Serial.print(distanceFront);
   Serial.print(",");
   Serial.print(distanceRight);
@@ -94,6 +95,7 @@ void publishSensorData() {
   Serial.print(leftMotor);
   Serial.print(",");
   Serial.println(rightMotor);
+
 }
 
 void recvWithStartEndMarkers() {
@@ -144,17 +146,19 @@ void dr_turn(Directions dir) {
 }
 
 void dr_turnLeft() {  // make it turn 90 degrees
-  dr_lastDirection = LEFT;
-  leftMotor = -1 * MOTOR_SPEED -10;
+  
+  leftMotor = -1 * (MOTOR_SPEED -10);
   rightMotor = MOTOR_SPEED -10;
   commandMotors();
+  delay(50);
 }
 
 void dr_turnRight() {  // make it turn 90 degrees
-  dr_lastDirection = RIGHT;
+  
   leftMotor = MOTOR_SPEED -10;
-  rightMotor = -1 * MOTOR_SPEED - 10;
+  rightMotor = -1 * (MOTOR_SPEED - 10);
   commandMotors();
+  delay(50);
 }
 
 void dr_turnAround(Directions bias) {
@@ -201,6 +205,8 @@ bool faceWallPerpendicularly() {
   Serial.println("Turning toward wall!");
   delay(3000);
 
+  bool lastTurnOpposite = false;
+
   while (!facingWall) {
     // publishSensorData();
     // facingWall = faceWallPerpendicularly();
@@ -210,17 +216,23 @@ bool faceWallPerpendicularly() {
     Serial.print("Last Direction: ");
     Serial.println(dr_lastDirection);
 
+
     // find the local minimum distance to the wall
-    if (distanceFront < lastSeenWallDistance) {
+    if (distanceFront <= lastSeenWallDistance) {
+      Serial.println("Distance decreasing");
       lastSeenWallDistance = distanceFront;
       if (distanceFront < minDistanceSeen) {
         lastMinChanged = millis();
         minDistanceSeen = distanceFront;
       }
+
       dr_turn(dr_lastDirection);
+      lastTurnOpposite = false;
+
+      delay(1000);
     } else {
       // if the distance starts increasing, turn the other way
-
+      Serial.println("Distance increasing");
       if (currentMillis > lastMinChanged + 5000) {
         // if it's been a while since the last minimum, assume we're done
         Serial.println("Found the closest wall!");
@@ -228,8 +240,15 @@ bool faceWallPerpendicularly() {
         delay(1000);
         return;
       }
+      if (!lastTurnOpposite) { // we did not change direction last time
+        lastTurnOpposite = true;
+        dr_lastDirection = -1 * dr_lastDirection;
+      } else { // we changed direction last time so we should not this time
+        lastTurnOpposite = false;
+      }
+      dr_turn(dr_lastDirection);
 
-      dr_turn(-1 * dr_lastDirection);
+
     }
     delay(50);
   }
@@ -345,9 +364,9 @@ int repairLineSensors() {
 void handleLineFollowing() {
 
   int crossesSeen = 0;
-  float LineKp = 0.2;
+  float LineKp = 0.1;
   float LineKI = 0;
-  float LineKD = 0;
+  float LineKD = 0.2;
 
   unsigned long previousMillis = millis();
   float prevError = -5000;
@@ -360,7 +379,7 @@ void handleLineFollowing() {
   bool debouncing = false;
   bool first = true;
 
-  while (crossesSeen < 2) {
+  while (crossesSeen < 3) {
     linePosition = qtr.readLineBlack(sensorValues);
     int res = repairLineSensors();
     if (res == 1 && !debouncing) {
@@ -406,7 +425,7 @@ void handleLineFollowing() {
     float derivative = (error - prevError) / deltaTime;   // placeholder for derivative term
     // output += LinedsaKp * error; //+ LineKD * derivative + LineKI * totalError;  // + LineKI * integral + LineKD * derivative;
     float output =  LineKp * error + LineKD * derivative + LineKI * totalError;
-    output = constrain(output, -20.0, 20.0);
+    output = constrain(output, -40.0, 40.0);
 
     Serial.print("output: ");
     Serial.println(output);
@@ -428,8 +447,8 @@ void handleLineFollowing() {
     Serial.print(leftMotor);
     Serial.print(",");
     Serial.println(rightMotor);
-    leftMotor = constrain(leftMotor, -70, 70);
-    rightMotor = constrain(rightMotor, -70, 70);
+    leftMotor = constrain(leftMotor, -90, 90);
+    rightMotor = constrain(rightMotor, -90, 90);
 
     previousMillis = currentMillis;
     prevError = error;
@@ -437,7 +456,7 @@ void handleLineFollowing() {
     commandMotors();
     delay(50);
   }
-  currentState = INIT;
+  currentState = AIMING;
   leftMotor = 0;
   rightMotor = 0;
   commandMotors();
@@ -469,12 +488,6 @@ void loop() {
   distanceFront = getUltrasonicReading(trigPinFront, echoPinFront);
   linePosition = qtr.readLineBlack(sensorValues);
   repairLineSensors();
-  Serial.println("Sensor Values: ");
-  for (int i=0; i<= 7; i++){
-    Serial.print(sensorValues[i]);
-    Serial.print(",");
-  }
-  Serial.println();
   // Every sensor reading under 300 is a noisy and messes up the lineposition measurement, so this for loop filters it out
   for (int i=0; i<= 7; i++){
     if (sensorValues[i] <300){
