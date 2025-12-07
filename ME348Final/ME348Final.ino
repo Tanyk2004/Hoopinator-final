@@ -95,7 +95,6 @@ void publishSensorData() {
   Serial.print(leftMotor);
   Serial.print(",");
   Serial.println(rightMotor);
-
 }
 
 void recvWithStartEndMarkers() {
@@ -146,37 +145,41 @@ void dr_turn(Directions dir) {
 }
 
 void dr_turnLeft() {  // make it turn 90 degrees
-  
-  leftMotor = -1 * (MOTOR_SPEED -10);
-  rightMotor = MOTOR_SPEED -10;
+
+  leftMotor = -1 * (MOTOR_SPEED - 10);
+  rightMotor = MOTOR_SPEED - 10;
   commandMotors();
-  delay(50);
+  delay(20);
 }
 
 void dr_turnRight() {  // make it turn 90 degrees
-  
-  leftMotor = MOTOR_SPEED -10;
+
+  leftMotor = MOTOR_SPEED - 10;
   rightMotor = -1 * (MOTOR_SPEED - 10);
   commandMotors();
-  delay(50);
+  delay(20);
 }
 
 void dr_turnAround(Directions bias) {
   leftMotor = MOTOR_SPEED / 2;
   rightMotor = -MOTOR_SPEED / 2;
   commandMotors();
-  delay(800);  // adjust this delay to achieve a 180-degree turn
+  delay(2000);  // adjust this delay to achieve a 180-degree turn
+  turnTowardRightWall();
+  turnTowardRightWall();
+
+
   stopMotors();
   // TODO: Add the bias
   if (bias == LEFT) {
     leftMotor = -MOTOR_SPEED;
     rightMotor = MOTOR_SPEED;
-    delay(100);
+    delay(400);
   } else {
     dr_lastDirection = RIGHT;
     leftMotor = MOTOR_SPEED;
     rightMotor = -MOTOR_SPEED;
-    delay(100);
+    delay(400);
   }
 }
 
@@ -240,15 +243,13 @@ bool faceWallPerpendicularly() {
         delay(1000);
         return;
       }
-      if (!lastTurnOpposite) { // we did not change direction last time
+      if (!lastTurnOpposite) {  // we did not change direction last time
         lastTurnOpposite = true;
         dr_lastDirection = -1 * dr_lastDirection;
-      } else { // we changed direction last time so we should not this time
+      } else {  // we changed direction last time so we should not this time
         lastTurnOpposite = false;
       }
       dr_turn(dr_lastDirection);
-
-
     }
     delay(50);
   }
@@ -285,78 +286,77 @@ void turnTowardLeftWall() {
     publishSensorData();
     lastSeenWallDistance = distanceFront;
     dr_turnLeft();
-    delay(50);
+    delay(20);
     distanceFront = getUltrasonicReading(trigPinFront, echoPinFront);
   }
   Serial.println("Turning right second leg");
   delay(3000);
+  distanceFront = getUltrasonicReading(trigPinFront, echoPinFront);
+  lastSeenWallDistance = distanceFront;
   while (distanceFront < lastSeenWallDistance) {  // turn right until distance starts increasing
     publishSensorData();
     lastSeenWallDistance = distanceFront;
     dr_turnLeft();
-    delay(50);
+    delay(20);
     distanceFront = getUltrasonicReading(trigPinFront, echoPinFront);
   }
   stopMotors();
 }
 
-void calibrateSensors(){
+void calibrateSensors() {
 
   //THE SENSORS ONLY CALIBRATE WHEN YOU UPLOAD NEW ARDUINO CODE TO THE ASTAR. after that the sensors STAY calibrated as long as the Astar has power.
 
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH); // turn on Arduino's LED to indicate we are in calibration mode
-                                   ///while calibrating, move the sensor over the line a couple times
+  digitalWrite(LED_BUILTIN, HIGH);  // turn on Arduino's LED to indicate we are in calibration mode
+                                    ///while calibrating, move the sensor over the line a couple times
 
   // 2.5 ms RC read timeout (default) * 10 reads per calibrate() call
   // = ~25 ms per calibrate() call.
   // Call calibrate() 400 times to make calibration take about 10s seconds.
-  for (uint16_t i = 0; i < 400; i++)
-  {
+  for (uint16_t i = 0; i < 400; i++) {
     qtr.calibrate();
   }
-  digitalWrite(LED_BUILTIN, LOW); // turn off Arduino's LED to indicate we are through with calibration
-  
+  digitalWrite(LED_BUILTIN, LOW);  // turn off Arduino's LED to indicate we are through with calibration
 }
 
 
 
 int repairLineSensors() {
-  for (int i=0; i<= 7; i++){
-   if (sensorValues[i] <300){
-       sensorValues[i]=0;     
+  for (int i = 0; i <= 7; i++) {
+    if (sensorValues[i] < 300) {
+      sensorValues[i] = 0;
     }
   }
-  if (sensorValues[0]==0 && sensorValues[1]==0 && sensorValues[2]==0 && sensorValues[3]==0 && sensorValues[4]==0 && sensorValues[5]==0 && sensorValues[6]==0 && sensorValues[7]==0){
-  linePosition=0;
+  if (sensorValues[0] == 0 && sensorValues[1] == 0 && sensorValues[2] == 0 && sensorValues[3] == 0 && sensorValues[4] == 0 && sensorValues[5] == 0 && sensorValues[6] == 0 && sensorValues[7] == 0) {
+    linePosition = 0;
   }
 
-  if (sensorValues[0] >0 && sensorValues[1]==0 && sensorValues[2]==0 && sensorValues[3]==0 && sensorValues[4]==0 && sensorValues[5]==0 && sensorValues[6]==0 && sensorValues[7]==0){
-    linePosition=1000;
-  } 
-  if (sensorValues[7] >0 && sensorValues[0]==0 && sensorValues[1]==0 && sensorValues[2]==0 && sensorValues[3]==0 && sensorValues[4]==0 && sensorValues[5]==0 && sensorValues[6]==0){
-    linePosition=5000;
+  if (sensorValues[0] > 0 && sensorValues[1] == 0 && sensorValues[2] == 0 && sensorValues[3] == 0 && sensorValues[4] == 0 && sensorValues[5] == 0 && sensorValues[6] == 0 && sensorValues[7] == 0) {
+    linePosition = 1000;
+  }
+  if (sensorValues[7] > 0 && sensorValues[0] == 0 && sensorValues[1] == 0 && sensorValues[2] == 0 && sensorValues[3] == 0 && sensorValues[4] == 0 && sensorValues[5] == 0 && sensorValues[6] == 0) {
+    linePosition = 5000;
   }
 
   //REPAIR NUMBER 4: there are still situations where linePosition is somehow greater than 5000 or 0<linePosition<1000, so I am hard capping linePosition to be between 1000 and 5000 when linePosition is greater
   //than zero.
-  if (linePosition > 5000){
+  if (linePosition > 5000) {
     linePosition = 5000;
   }
-  if (linePosition < 1000 && linePosition > 0){
+  if (linePosition < 1000 && linePosition > 0) {
     linePosition = 1000;
   }
 
   // No line is detected
-  if (sensorValues[0]==0 && sensorValues[1]==0 && sensorValues[2]==0 && sensorValues[3]==0 && sensorValues[4]==0 && sensorValues[5]==0 && sensorValues[6]==0 && sensorValues[7]==0){
+  if (sensorValues[0] == 0 && sensorValues[1] == 0 && sensorValues[2] == 0 && sensorValues[3] == 0 && sensorValues[4] == 0 && sensorValues[5] == 0 && sensorValues[6] == 0 && sensorValues[7] == 0) {
     linePosition = 9500;
   }
 
-  //this loop uses the leftmost and rightmost sensors to determin if the robot is at a cross. If both of those sensors read high, then the robot is at a cross. 
-  if ((sensorValues[7] > 500) && (sensorValues[0] > 500)){
+  //this loop uses the leftmost and rightmost sensors to determin if the robot is at a cross. If both of those sensors read high, then the robot is at a cross.
+  if ((sensorValues[7] > 500) && (sensorValues[0] > 500)) {
     return 1;
-  }
-  else {
+  } else {
     return 0;
   }
 }
@@ -391,18 +391,44 @@ void handleLineFollowing() {
       leftMotor = 0;
       rightMotor = 0;
       commandMotors();
-      delay(5000);
-    } 
+      delay(2000);
+      if (crossesSeen == 1) {
+        Serial.println("On the line!");
+        delay(1000);
+        // if this is the first cross seen we're on the line for the first time
+        // Now turn until the line sensors catch the line
+        distanceFront = getUltrasonicReading(trigPinFront, echoPinFront);
+        distanceRight = getUltrasonicReading(trigPinRight, echoPinRight);
+
+        if (distanceRight > (START_BOX_Y / 2.0f)) {
+          // we need to turn left
+          linePosition = qtr.readLineBlack(sensorValues);
+          dr_turnLeft();
+          delay(100);
+          while (linePosition >= 5000 & linePosition <= 1000) {
+            linePosition = qtr.readLineBlack(sensorValues);
+            turnTowardLeftWall();
+          }
+        } else {
+          // we need to turn right
+          linePosition = qtr.readLineBlack(sensorValues);
+          dr_turnRight();
+          delay(100);
+          turnTowardRightWall();
+        }
+      }
+    }
     // if none of the sensors see a line drive forward
     if (linePosition == 9500) {
       leftMotor = MOTOR_SPEED;
       rightMotor = MOTOR_SPEED;
+      publishSensorData();
       commandMotors();
       continue;
     }
 
     // Implement a simple PID controller for line following
-    
+
 
     error = (float)linePosition - 3500.0f;  // assuming 3500 is the
     if (first) {
@@ -422,10 +448,10 @@ void handleLineFollowing() {
       iterationLastReset = numIterations;
     }
 
-    float derivative = (error - prevError) / deltaTime;   // placeholder for derivative term
+    float derivative = (error - prevError) / deltaTime;  // placeholder for derivative term
     // output += LinedsaKp * error; //+ LineKD * derivative + LineKI * totalError;  // + LineKI * integral + LineKD * derivative;
-    float output =  LineKp * error + LineKD * derivative + LineKI * totalError;
-    output = constrain(output, -40.0, 40.0);
+    float output = LineKp * error + LineKD * derivative + LineKI * totalError;
+    output = constrain(output, -45.0, 45.0);
 
     Serial.print("output: ");
     Serial.println(output);
@@ -443,16 +469,17 @@ void handleLineFollowing() {
 
     leftMotor = MOTOR_SPEED - output;
     rightMotor = MOTOR_SPEED + output;
-    
-    Serial.print(leftMotor);
-    Serial.print(",");
-    Serial.println(rightMotor);
-    leftMotor = constrain(leftMotor, -90, 90);
-    rightMotor = constrain(rightMotor, -90, 90);
+
+
+    leftMotor = constrain(leftMotor, -120, 1200);
+    rightMotor = constrain(rightMotor, -120, 120);
 
     previousMillis = currentMillis;
     prevError = error;
     numIterations++;
+    Serial.print(leftMotor);
+    Serial.print(",");
+    Serial.println(rightMotor);
     commandMotors();
     delay(50);
   }
@@ -475,11 +502,11 @@ void setup() {
   delay(5000);
   digitalWrite(LED_BUILTIN, LOW);
   qtr.setTypeRC();
-  qtr.setSensorPins((const uint8_t[]){18, 20, 21, 22, 23, 16, 15, 14}, SensorCount);
+  qtr.setSensorPins((const uint8_t[]){ 18, 20, 21, 22, 23, 16, 15, 14 }, SensorCount);
   calibrateSensors();
 
-  qtr.setEmitterPin(4); //can get away with a single emitter pin providing power to both emitters
-   QTRReadMode::On; //emitters on measures active reflectance instead of ambient light levels, better becasue the ambient light level will change as the robot moves around the board but the reflectance levels will not
+  qtr.setEmitterPin(4);  //can get away with a single emitter pin providing power to both emitters
+  QTRReadMode::On;       //emitters on measures active reflectance instead of ambient light levels, better becasue the ambient light level will change as the robot moves around the board but the reflectance levels will not
 }
 
 void loop() {
@@ -489,12 +516,12 @@ void loop() {
   linePosition = qtr.readLineBlack(sensorValues);
   repairLineSensors();
   // Every sensor reading under 300 is a noisy and messes up the lineposition measurement, so this for loop filters it out
-  for (int i=0; i<= 7; i++){
-    if (sensorValues[i] <300){
-        sensorValues[i]=0;     
-      }
+  for (int i = 0; i <= 7; i++) {
+    if (sensorValues[i] < 300) {
+      sensorValues[i] = 0;
+    }
   }
-  
+
   recvWithStartEndMarkers();
   if (newData == true) {
     strcpy(tempChar, receivedChars);
@@ -517,7 +544,7 @@ void loop() {
 
       publishSensorData();
       Serial.println("Facing line now");
-      delay(5000);
+      delay(2000);
 
       if (distanceFront < START_BOX_X) {  // 45.72 cm
         // we are facing the backwall
@@ -535,7 +562,7 @@ void loop() {
           distanceRight = getUltrasonicReading(trigPinRight, echoPinRight);
           lastSeenWallDistance = distanceFront;  // reset for next use
           dr_turnRight();
-          delay(1000);
+          delay(100);
           turnTowardRightWall();
           currentState = LINE_FOLLOWING;
 
@@ -547,7 +574,7 @@ void loop() {
           distanceRight = getUltrasonicReading(trigPinRight, echoPinRight);
           lastSeenWallDistance = distanceFront;  // reset for next use
           dr_turnLeft();
-          delay(1000);
+          delay(100);
           turnTowardLeftWall();
           currentState = LINE_FOLLOWING;
         }
@@ -562,6 +589,8 @@ void loop() {
           // we are behind the midpoint therefore just drive forward towards the line
           currentState = LINE_FOLLOWING;
         } else {
+          Serial.println("Turning around!");
+          delay(2000);
           // we are facing the side wall and in front of the midpoint therefore turn around
           dr_turnAround(wallBeingFaced);
           stopMotors();
@@ -626,8 +655,8 @@ void loop() {
 void commandMotors() {
 
   //read the documentation for the functions that drive the motors in the astar library
-  m.setM1Speed(rightMotor);
-  m.setM2Speed(leftMotor);
+  m.setM2Speed(rightMotor);
+  m.setM1Speed(leftMotor);
   //uncomment to drive motors
 }
 
